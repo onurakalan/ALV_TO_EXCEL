@@ -15,7 +15,13 @@ CLASS zcl_bc_alv_to_excel DEFINITION
         IMPORTING
           ir_grid         TYPE REF TO cl_gui_alv_grid
         RETURNING
-          VALUE(ro_excel) TYPE REF TO zcl_excel.
+          VALUE(ro_excel) TYPE REF TO zcl_excel,
+      get_excel_xstring
+        IMPORTING
+          io_excel       TYPE REF TO zcl_excel
+        RETURNING
+          VALUE(rv_xslx) TYPE xstring
+        .
 
 
   PROTECTED SECTION.
@@ -23,7 +29,7 @@ CLASS zcl_bc_alv_to_excel DEFINITION
     CONSTANTS:
       c_red_cell   TYPE lvc_istyle VALUE '7',
       c_green_cell TYPE lvc_istyle VALUE '6'.
-      "to do : add other color
+    "to do : add other color
 
     CONSTANTS:
       c_subtotal TYPE lvc_istyle VALUE '36',
@@ -597,4 +603,14 @@ CLASS zcl_bc_alv_to_excel IMPLEMENTATION.
 
     ENDLOOP.
   ENDMETHOD.
+  METHOD get_excel_xstring.
+    DATA lo_excel_writer TYPE REF TO zif_excel_writer.
+    CREATE OBJECT lo_excel_writer TYPE zcl_excel_writer_2007.
+
+    TRY.
+        rv_xslx = lo_excel_writer->write_file( io_excel ).
+      CATCH zcx_excel.
+    ENDTRY.
+  ENDMETHOD.
+
 ENDCLASS.
