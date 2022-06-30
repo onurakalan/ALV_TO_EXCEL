@@ -517,7 +517,7 @@ CLASS zcl_bc_alv_to_excel IMPLEMENTATION.
             lv_row_from = lv_totbeg.
         ENDCASE.
 
-        lv_row_to = <lgfs_row>-row_pos .
+        lv_row_to = <lgfs_row>-row_pos + c_header_count - 1 .
 
         TRY.
             lo_worksheet->set_row_outline(
