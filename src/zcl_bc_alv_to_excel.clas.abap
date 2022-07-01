@@ -9,13 +9,24 @@ CLASS zcl_bc_alv_to_excel DEFINITION
 
   PUBLIC SECTION.
 
+    TYPES:
+      tt_data TYPE SORTED TABLE OF lvc_s_data WITH NON-UNIQUE KEY row_pos col_pos,
+      tt_info TYPE SORTED TABLE OF lvc_s_info WITH NON-UNIQUE KEY col_pos.
+
     METHODS:
       constructor,
       alv_grid_to_abap2xslx
         IMPORTING
-          ir_grid         TYPE REF TO cl_gui_alv_grid
+          it_data TYPE tt_data
+          it_info TYPE tt_info
         RETURNING
           VALUE(ro_excel) TYPE REF TO zcl_excel,
+      get_alv_data
+        IMPORTING
+          ir_grid TYPE REF TO cl_gui_alv_grid
+        EXPORTING
+          et_data TYPE tt_data
+          et_info TYPE tt_info,
       get_excel_xstring
         IMPORTING
           io_excel       TYPE REF TO zcl_excel
@@ -38,9 +49,6 @@ CLASS zcl_bc_alv_to_excel DEFINITION
     CONSTANTS:
       c_header_count TYPE i VALUE 1. "Excel Header Line Count
 
-    TYPES:
-      tt_data TYPE SORTED TABLE OF lvc_s_data WITH NON-UNIQUE KEY row_pos col_pos,
-      tt_info TYPE SORTED TABLE OF lvc_s_info WITH NON-UNIQUE KEY col_pos.
 
     DATA :
       _mv_style_title              TYPE zexcel_cell_style,
@@ -56,12 +64,6 @@ CLASS zcl_bc_alv_to_excel DEFINITION
         _mv_sub_begline TYPE i.
 
     METHODS :
-      _get_alv_data
-        IMPORTING
-          ir_grid TYPE REF TO cl_gui_alv_grid
-        EXPORTING
-          et_data TYPE tt_data
-          et_info TYPE tt_info,
       _set_style
         IMPORTING
           io_excel TYPE REF TO zcl_excel,
@@ -104,15 +106,10 @@ CLASS zcl_bc_alv_to_excel IMPLEMENTATION.
 
   METHOD alv_grid_to_abap2xslx.
 
-"GET ALV DATA
+    "GET ALV DATA
     """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-    me->_get_alv_data(
-      EXPORTING
-        ir_grid = ir_grid
-      IMPORTING
-        et_data = DATA(lt_data)
-        et_info = DATA(lt_info)
-    ).
+    DATA(lt_data) = it_data.
+    DATA(lt_info) = it_info.
 
     "CREATE EXCEL
     """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -132,7 +129,7 @@ CLASS zcl_bc_alv_to_excel IMPLEMENTATION.
             io_excel = ro_excel ).
   ENDMETHOD.
 
-  METHOD _get_alv_data.
+  METHOD get_alv_data.
     DATA :
       lr_grid_facade TYPE REF TO cl_salv_gui_grid_facade.
 

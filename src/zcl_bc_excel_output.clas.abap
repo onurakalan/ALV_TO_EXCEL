@@ -11,6 +11,8 @@ CLASS zcl_bc_excel_output DEFINITION
           io_excel            TYPE REF TO zcl_excel
           iv_writerclass_name TYPE clike OPTIONAL
           iv_info_message     TYPE abap_bool DEFAULT abap_true
+          iv_title            TYPE sy-title OPTIONAL
+          iv_mail             TYPE ad_smtpadr OPTIONAL
         RAISING
           zcx_excel.
 
@@ -19,14 +21,18 @@ CLASS zcl_bc_excel_output DEFINITION
     DATA:
       xdata     TYPE xstring,             " Will be used for sending as email
       t_rawdata TYPE solix_tab,           " Will be used for downloading or open directly
-      bytecount TYPE i.
+      bytecount TYPE i,
+      title TYPE sy-title,
+      mail  TYPE ad_smtpadr.
 
     METHODS :
       download_frontend,
       _get_filename
         CHANGING
           cv_fullpath TYPE string
-          cv_result   TYPE i.
+          cv_result   TYPE i,
+      send_email,
+      download_backend.
 ENDCLASS.
 
 
@@ -49,6 +55,8 @@ CLASS zcl_bc_excel_output IMPLEMENTATION.
         lo_output->xdata = lo_writer->write_file( io_excel ).
         lo_output->t_rawdata = cl_bcs_convert=>xstring_to_solix( iv_xstring  = lo_output->xdata ).
         lo_output->bytecount = xstrlen( lo_output->xdata ).
+        lo_output->title = iv_title.
+        lo_output->mail = iv_mail.
 
 
         CASE iv_option.
@@ -60,7 +68,7 @@ CLASS zcl_bc_excel_output IMPLEMENTATION.
             ENDIF.
 
           WHEN zcl_bc_excel_outopt=>c_backend.
-*        lo_output->download_backend( ).
+            lo_output->download_backend( ).
 
           WHEN zcl_bc_excel_outopt=>c_show.
             IF sy-batch IS INITIAL.
@@ -70,7 +78,7 @@ CLASS zcl_bc_excel_output IMPLEMENTATION.
             ENDIF.
 
           WHEN zcl_bc_excel_outopt=>c_mail.
-*        cl_output->send_email( ).
+            lo_output->send_email( ).
 
         ENDCASE.
 
@@ -93,7 +101,7 @@ CLASS zcl_bc_excel_output IMPLEMENTATION.
     cl_gui_frontend_services=>get_desktop_directory( CHANGING desktop_directory = lv_path ).
     cl_gui_cfw=>flush( ).
 
-    CONCATENATE sy-title '_' sy-datum '.XLSX' INTO lv_filename.
+    CONCATENATE title '_' sy-datum '.XLSX' INTO lv_filename.
 
     CALL METHOD cl_gui_frontend_services=>file_save_dialog
       EXPORTING
@@ -166,6 +174,129 @@ CLASS zcl_bc_excel_output IMPLEMENTATION.
 
     ENDIF.
 
+  ENDMETHOD.
+
+
+  METHOD send_email.
+
+    DATA: bcs_exception        TYPE REF TO cx_bcs,
+          errortext            TYPE string,
+          cl_send_request      TYPE REF TO cl_bcs,
+          cl_document          TYPE REF TO cl_document_bcs,
+          cl_recipient         TYPE REF TO if_recipient_bcs,
+          cl_sender            TYPE REF TO cl_cam_address_bcs,
+          t_attachment_header  TYPE soli_tab,
+          wa_attachment_header LIKE LINE OF t_attachment_header,
+          attachment_subject   TYPE sood-objdes,
+
+          sood_bytecount       TYPE sood-objlen,
+          mail_title           TYPE so_obj_des,
+          t_mailtext           TYPE soli_tab,
+          wa_mailtext          LIKE LINE OF t_mailtext,
+          send_to              TYPE adr6-smtp_addr,
+          sent                 TYPE abap_bool,
+
+          lv_filename          TYPE string.
+
+    CONCATENATE title '_' sy-datum '.XLSX' INTO lv_filename.
+
+    mail_title     = |{ title } Excel|.
+    wa_mailtext    = 'Excel ektedir'.
+    APPEND wa_mailtext TO t_mailtext.
+
+    TRY.
+
+        cl_send_request = cl_bcs=>create_persistent( ).
+        cl_document = cl_document_bcs=>create_document( i_type    = 'RAW' "#EC NOTEXT
+                                                        i_text    = t_mailtext
+                                                        i_subject = mail_title ).
+
+        attachment_subject  = lv_filename.
+        CONCATENATE '&SO_FILENAME=' attachment_subject INTO wa_attachment_header.
+        APPEND wa_attachment_header TO t_attachment_header.
+* Attachment
+        sood_bytecount = bytecount.
+        cl_document->add_attachment(  i_attachment_type    = 'XLS' "#EC NOTEXT
+                                      i_attachment_subject = attachment_subject
+                                      i_attachment_size    = sood_bytecount
+                                      i_att_content_hex    = t_rawdata
+                                      i_attachment_header  = t_attachment_header ).
+
+* add document to send request
+        cl_send_request->set_document( cl_document ).
+
+* add recipient(s) - here only 1 will be needed
+        "kullanıcının maili..
+        DATA : rpbenerr TYPE TABLE OF rpbenerr.
+
+        CALL FUNCTION 'HR_FBN_GET_USER_EMAIL_ADDRESS'
+          EXPORTING
+            user_id       = sy-uname
+            reaction      = 'X'
+          IMPORTING
+            email_address = send_to
+          TABLES
+            error_table   = rpbenerr
+          .
+
+*        send_to = 'aybuke.aydemir@improva.com.tr'.
+
+
+        cl_recipient = cl_cam_address_bcs=>create_internet_address( send_to ).
+        cl_send_request->add_recipient( cl_recipient ).
+
+* Und abschicken
+        sent = cl_send_request->send( i_with_error_screen = 'X' ).
+
+        COMMIT WORK.
+
+        IF sent = abap_true.
+          MESSAGE s805(zabap2xlsx).
+          MESSAGE 'Document ready to be sent - Check SOST or SCOT' TYPE 'I'.
+        ELSE.
+*          MESSAGE i804(zabap2xlsx) WITH p_email.
+        ENDIF.
+
+      CATCH cx_bcs INTO bcs_exception.
+        errortext = bcs_exception->if_message~get_text( ).
+        MESSAGE errortext TYPE 'I'.
+
+    ENDTRY.
+  ENDMETHOD.
+
+
+  METHOD download_backend.
+    DATA : lv_filename TYPE string.
+    DATA: bytes_remain TYPE i.
+    FIELD-SYMBOLS: <rawdata> LIKE LINE OF t_rawdata.
+
+    CONCATENATE title '_' sy-datum '.XLSX' INTO lv_filename.
+
+    OPEN DATASET lv_filename FOR OUTPUT IN BINARY MODE.
+    CHECK sy-subrc = 0.
+
+    bytes_remain = bytecount.
+
+    LOOP AT t_rawdata ASSIGNING <rawdata>.
+
+      AT LAST.
+        CHECK bytes_remain >= 0.
+        TRANSFER <rawdata> TO lv_filename LENGTH bytes_remain.
+        EXIT.
+      ENDAT.
+
+      TRANSFER <rawdata> TO lv_filename.
+      SUBTRACT 255 FROM bytes_remain.  " Solix has length 255
+
+    ENDLOOP.
+
+    CLOSE DATASET lv_filename.
+
+    IF sy-repid <> sy-cprog AND sy-cprog IS NOT INITIAL.  " no need to display anything if download was selected and report was called for demo purposes
+      LEAVE PROGRAM.
+    ELSE.
+      MESSAGE 'Data transferred to default backend directory' TYPE 'S'.
+    ENDIF.
   ENDMETHOD.
 
 ENDCLASS.
