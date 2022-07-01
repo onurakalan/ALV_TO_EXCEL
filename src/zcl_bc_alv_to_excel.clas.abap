@@ -103,10 +103,8 @@ CLASS zcl_bc_alv_to_excel IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD alv_grid_to_abap2xslx.
-    DATA:
-      lo_excel     TYPE REF TO zcl_excel.
 
-    "GET ALV DATA
+"GET ALV DATA
     """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
     me->_get_alv_data(
       EXPORTING
@@ -118,11 +116,11 @@ CLASS zcl_bc_alv_to_excel IMPLEMENTATION.
 
     "CREATE EXCEL
     """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-    CREATE OBJECT lo_excel.
+    CREATE OBJECT ro_excel.
 
     "SET STYLE
     """""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
-    me->_set_style( io_excel = lo_excel ).
+    me->_set_style( io_excel = ro_excel ).
 
     "DATA TO EXCEL
     """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -131,7 +129,7 @@ CLASS zcl_bc_alv_to_excel IMPLEMENTATION.
             it_data = lt_data
             it_info = lt_info
          CHANGING
-            io_excel = lo_excel ).
+            io_excel = ro_excel ).
   ENDMETHOD.
 
   METHOD _get_alv_data.
